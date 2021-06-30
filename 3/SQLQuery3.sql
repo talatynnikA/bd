@@ -1,0 +1,1 @@
+ALTER Table STUDENT ADD Дата_поступления date

@@ -1,0 +1,203 @@
+USE TAL_UNIVER
+GO
+
+-- 1-- скалярная функция -- вычисление студентов на факультете
+
+CREATE FUNCTION COUNT_STUDENTS(@FACULTY VARCHAR(20)) RETURNS INT
+AS BEGIN
+	DECLARE @RC INT = (
+		SELECT COUNT(*)
+		FROM STUDENT S
+			INNER JOIN [GROUPS] G ON G.IDGROUP = S.IDGROUP
+			INNER JOIN FACULTY F ON F.FACULTY = G.FACULTY
+				AND F.FACULTY = @FACULTY
+	)
+	RETURN @RC
+END
+GO
+
+SELECT [FACULTY_NAME],
+	dbo.COUNT_STUDENTS(FACULTY)
+FROM FACULTY
+GO
+
+ALTER FUNCTION COUNT_STUDENTS(@FACULTY VARCHAR(10) = NULL, @PROF VARCHAR(20) = '1-40 01 02') RETURNS INT
+AS BEGIN
+	DECLARE @RC INT = (
+		SELECT COUNT(S.IDSTUDENT)
+		FROM STUDENT S
+			INNER JOIN [GROUPS] G ON G.IDGROUP = S.IDGROUP
+				AND @PROF = G.PROFESSION			--изменение с добавлением специальности
+			INNER JOIN FACULTY F ON F.FACULTY = G.FACULTY
+				AND F.FACULTY = @FACULTY
+	)
+	RETURN @RC
+END
+GO
+
+SELECT F.[FACULTY_NAME],
+	G.PROFESSION,
+	dbo.COUNT_STUDENTS(F.FACULTY, G.PROFESSION)		--опробовать работу функции
+FROM FACULTY F
+	INNER JOIN [GROUPS] G ON F.FACULTY = G.FACULTY
+GROUP BY F.[FACULTY_NAME], F.FACULTY, G.PROFESSION
+UNION
+SELECT F.[FACULTY_NAME],
+	'1-40 01 02 default',
+	dbo.COUNT_STUDENTS(F.FACULTY, DEFAULT)
+FROM FACULTY F
+	INNER JOIN [GROUPS] G ON F.FACULTY = G.FACULTY
+		AND G.PROFESSION = '1-40 01 02'
+GROUP BY F.[FACULTY_NAME], F.FACULTY
+GO
+
+-- 2--скалярная функция с использованием курсора
+
+CREATE FUNCTION FSUBJECTS(@P VARCHAR(20)) RETURNS VARCHAR(300)
+AS BEGIN
+	DECLARE SUBJ_CUR CURSOR LOCAL STATIC FOR
+	SELECT SUBJECT
+	FROM SUBJECT
+	WHERE @P = PULPIT
+	OPEN SUBJ_CUR
+	DECLARE @RET VARCHAR(300) = 'ДИСЦИПЛИНЫ: ', @SUBJ CHAR(10)
+	FETCH SUBJ_CUR INTO @SUBJ
+	IF @@fetch_status != 0
+	BEGIN
+		CLOSE SUBJ_CUR
+		RETURN 'ДИСЦИПЛИНЫ.' --возвращает перечень дисциплин
+	END
+	SET @RET = @RET + RTRIM(@SUBJ)
+	FETCH SUBJ_CUR INTO @SUBJ
+	WHILE @@fetch_status = 0
+	BEGIN
+		SET @RET = @RET +', ' + RTRIM(@SUBJ)
+		FETCH SUBJ_CUR INTO @SUBJ
+	END
+	CLOSE SUBJ_CUR
+	RETURN @RET
+END
+GO
+
+SELECT PULPIT,
+	dbo.FSUBJECTS(PULPIT)
+FROM PULPIT
+GO
+
+-- 3 -- табличная функция кот. исп. select запрос 
+
+CREATE FUNCTION FFACPUL(@F VARCHAR(10), @P VARCHAR(20)) RETURNS TABLE -- принимает 2 парам. возвр табл
+AS
+	RETURN SELECT F.FACULTY,
+		P.PULPIT
+	FROM FACULTY F
+		LEFT OUTER JOIN PULPIT P ON F.FACULTY = P.FACULTY
+	WHERE F.FACULTY = ISNULL(@F, F.FACULTY)
+		AND P.PULPIT = ISNULL(@P, P.PULPIT)
+GO
+
+SELECT * -- задать параметры
+FROM dbo.FFACPUL(NULL, NULL)-- результат -  список всех кафедр на факультетах
+SELECT *
+FROM dbo.FFACPUL('ХТиТ', NULL) --список кафедр заданного факультета
+SELECT *
+FROM dbo.FFACPUL(NULL, 'ИСиТ')--строка, соотв заданной кафедре
+SELECT *
+FROM dbo.FFACPUL('ХТиТ', 'ИСиТ')-- заданная кафедра на заданном факультете
+GO
+
+-- 4-- скалярная функция с одним параметром для кол-ва преподавателей на кафедре
+
+CREATE FUNCTION FCTEACHER(@P VARCHAR(20)) RETURNS INT
+AS BEGIN
+	RETURN (
+		SELECT COUNT(*) 
+		FROM TEACHER 
+		WHERE PULPIT = ISNULL(@P, PULPIT)
+	)
+END
+GO
+
+SELECT PULPIT,
+	dbo.FCTEACHER(PULPIT) [КОЛИЧЕСТВО ПРЕПОДАВАТЕЛЕЙ]
+FROM PULPIT
+SELECT dbo.FCTEACHER(NULL) [ВСЕГО ПРЕПОДАВАТЕЛЕЙ]
+GO
+
+-- 6--многооператорную табличную функцию чтобы кол-во кафедр, групп, студентов и специальностей вычислялось отдельными скалярными функциями
+
+ALTER FUNCTION COUNT_STUDENTS(@FACULTY VARCHAR(20)) RETURNS INT--кол-во студентов
+AS BEGIN
+	RETURN (
+		SELECT COUNT(S.IDSTUDENT)
+		FROM STUDENT S
+			INNER JOIN [GROUPS] G ON G.IDGROUP = S.IDGROUP
+				AND G.FACULTY = @FACULTY
+	)
+END
+GO
+
+CREATE FUNCTION COUNT_PULPIT(@F VARCHAR(10)) RETURNS INT--кол-во кафедр
+AS BEGIN
+	RETURN (
+		SELECT COUNT(*)
+		FROM PULPIT
+		WHERE FACULTY = @F
+	)
+END
+GO
+
+CREATE FUNCTION COUNT_GROUPS(@F VARCHAR(10)) RETURNS INT--групп кол-во
+AS BEGIN
+	RETURN (
+		SELECT COUNT(*)
+		FROM [GROUPS]
+		WHERE FACULTY = @F
+	)
+END
+GO
+
+CREATE FUNCTION COUNT_PROFESSIONS(@F VARCHAR(10)) RETURNS INT--специальностей
+AS BEGIN
+	RETURN (
+		SELECT COUNT(*)
+		FROM PROFESSION
+		WHERE FACULTY = @F
+	)
+END
+GO
+
+create function FACULTY_REPORT(@c int) returns @fr table
+	( [Факультет] varchar(50), [Количество кафедр] int, [Количество групп]  int, [Количество студентов] int, [Количество специальностей] int )
+as begin 
+	declare cc CURSOR LOCAL static for
+		SELECT FACULTY
+		FROM FACULTY
+		WHERE dbo.COUNT_STUDENTS(FACULTY) > @c;
+	DECLARE @f VARCHAR(10);
+	OPEN cc;
+	FETCH cc INTO @f;
+	WHILE @@fetch_status = 0
+	BEGIN
+		INSERT @fr
+		VALUES ( @f, dbo.COUNT_PULPIT(@f), dbo.COUNT_GROUPS(@f), dbo.COUNT_STUDENTS(@f), dbo.COUNT_PROFESSIONS(@f) );--добавить результат выполнения в исходную
+		FETCH cc INTO @f;
+	END;
+	RETURN;
+END;
+GO
+
+SELECT *
+FROM dbo.FACULTY_REPORT(0)--проверка
+GO
+
+DROP FUNCTION dbo.FACULTY_REPORT
+DROP FUNCTION dbo.FFACPUL
+DROP FUNCTION dbo.FSUBJECTS
+DROP FUNCTION dbo.FCTEACHER
+DROP FUNCTION dbo.COUNT_GROUPS
+DROP FUNCTION dbo.COUNT_PROFESSIONS
+DROP FUNCTION dbo.COUNT_PULPIT
+DROP FUNCTION dbo.COUNT_STUDENTS
+GO
+

@@ -1,0 +1,54 @@
+USE master
+GO
+
+CREATE DATABASE TAL_UNIVER
+ON PRIMARY
+(
+    NAME = N'TAL_UNIVER_mdf.mdf',
+    FILENAME = N'D:\TAL_UNIVER_DB.mdf',
+	-----NAME = N'TAL_UNIVER_ndf.ndf',
+	------FILENAME = N'D:\TAL_UNIVER_ndf.ndf',
+
+    SIZE = 5MB,
+    MAXSIZE = 10MB,
+    FILEGROWTH = 1MB
+),
+FILEGROUP G1
+( 
+    NAME = N'TAL_UNIVER_11',
+    FILENAME = N'D:\TAL_UNIVER_G1_1.ndf', 
+    SIZE = 10Mb,
+    MAXSIZE=15Mb,
+    FILEGROWTH=1Mb
+),
+( 
+    NAME = N'TAL_UNIVER_12',
+    FILENAME = N'D:\TAL_UNIVER_G1_2.ndf', 
+    SIZE = 2Mb, 
+    MAXSIZE=5Mb,
+    FILEGROWTH=1Mb
+),
+FILEGROUP G2 DEFAULT
+(
+    NAME = N'TAL_UNIVER_21',
+    FILENAME = N'D:\TAL_UNIVER_G2_1.ndf', 
+    SIZE = 5Mb,
+    MAXSIZE=10Mb,
+    FILEGROWTH=1Mb
+),
+(
+    NAME = N'TAL_UNIVER_22',
+    FILENAME = N'D:\TAL_UNIVER_G2_2.ndf', 
+    SIZE = 2Mb,
+    MAXSIZE=5Mb,
+    FILEGROWTH=1Mb
+)
+LOG ON
+(
+    NAME = N'TAL_UNIVER_LOG',
+    FILENAME = N'D:\TAL_UNIVER_LOG.ldf',
+    SIZE = 5Mb,
+    MAXSIZE = UNLIMITED,
+    FILEGROWTH = 1MB
+)
+GO

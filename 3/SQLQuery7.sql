@@ -1,0 +1,7 @@
+UPDATE STUDENT set Номер_группы = 5;
+
+SELECT *From STUDENT
+
+DELETE FROM STUDENT WHERE Номер_зачетки= 1234;
+
+SELECT *From STUDENT
